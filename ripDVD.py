@@ -101,8 +101,13 @@ def main():
     now_string = sub_process_result.stdout.decode('utf-8')[1:-2]
     print(now_string)
 
-    subprocess.run(['mplayer', '/dev/sr' + str(drive_number), '-v',
-                    '-dumpstream', '-dumpfile', file_name + '_' + now_string + '.avi'])
+    mplayer_instance = subprocess.Popen(['mplayer', '/dev/sr' + str(drive_number), '-v', '-dumpstream', '-dumpfile',
+                                         file_name + '_' + now_string + '.avi'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    pv_instance = subprocess.Popen(['pv', '-d', str(mplayer_instance.pid), '-peI'])
+
+    mplayer_instance.wait()
+    pv_instance.wait()
 
     # eject dvd after finishing
     subprocess.run(['eject', '/dev/sr' + str(drive_number)])
