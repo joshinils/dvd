@@ -67,21 +67,17 @@ def main():
 
     required_named = parser.add_argument_group('required arguments')
     required_named.add_argument('-d', '--driveNo', help='drive number, ie \'/dev/sr0\' means \'-d 0\'', required=True)
-    parser.add_argument('-f', type=str, default="CD", help='filename to prepend the standard name, default="CD"')
+    parser.add_argument('-w', default=None, help='multi-CD identifier')
 
     args = parser.parse_args()
+
+    w = args.w
 
     drive_number = args.driveNo
     assert drive_number is not None, "why u put no drive number, that dum"
 
     # only proceed if the drive exists
     assert drive_exists(drive_number), "drive /dev/sr" + str(drive_number) + " doesn't exist!"
-
-    file_name = args.f
-
-    # print("driveOpen", driveOpen(drive_number))
-    # print("driveReady", driveReady(drive_number))
-    # print("driveFull", driveFull(drive_number))
 
     wait_on_ready_drive(drive_number)
     while not drive_full(drive_number):
@@ -95,20 +91,13 @@ def main():
 
     # at this point the drive should be ready and there should be a disc in it
 
-    # sub_process_result = subprocess.run(['date', '+"%Y-%m-%dT%H%M%S"'],
-    #                                     stdout=subprocess.PIPE,
-    #                                     stderr=subprocess.PIPE)
-    # now_string = sub_process_result.stdout.decode('utf-8')[1:-2]
-    # print(now_string)
+    if w is not None:
+        w_str = ["-W", w]
+    else:
+        w_str = ["", ""]
 
-    abcde_instance = subprocess.Popen(["abcde", "-x", "-N", "-V", "-G", "-B", "-d", "/dev/sr" + str(drive_number)])
-
-    # abcde_instance = subprocess.Popen(["abcde", "-x", "-N", "-V", "-G", "-B", "-d", "/dev/sr" + str(drive_number)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    # pv_instance = subprocess.Popen(['pv', '-d', str(abcde_instance.pid), '-peI'])
-
+    abcde_instance = subprocess.Popen(["abcde", "-x", "-N", "-V", "-G", "-B", "-d", "/dev/sr" + str(drive_number), w_str[0], w_str[1]])
     abcde_instance.wait()
-    # pv_instance.wait()
 
     # eject cd after finishing
     subprocess.run(['eject', '/dev/sr' + str(drive_number)])
