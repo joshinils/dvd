@@ -1,64 +1,11 @@
 #!/usr/bin/env python3
 
-import subprocess
 import argparse
+import os
+import subprocess
 import time
-import sys
 
-
-def drive_exists(drive_number: int) -> bool:
-    sub_process_result = subprocess.run(['setcd', '-i', '/dev/sr'+str(drive_number)],
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-    sub_process_std_out = sub_process_result.stdout.decode('utf-8')
-    sub_process_std_err = sub_process_result.stderr.decode('utf-8')
-    # print("sub_process_std_out", sub_process_std_out)
-    # print("sub_process_std_err", sub_process_std_err)
-    return 'No such file or directory' not in sub_process_std_err
-
-
-def drive_full(drive_number: int) -> bool:
-    sub_process_result = subprocess.run(['setcd', '-i', '/dev/sr'+str(drive_number)],
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-    sub_process_std_out = sub_process_result.stdout.decode('utf-8')
-    return 'Disc found in drive' in sub_process_std_out
-
-
-def drive_ready(drive_number: int) -> bool:
-    sub_process_result = subprocess.run(['setcd', '-i', '/dev/sr'+str(drive_number)],
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-    sub_process_std_out = sub_process_result.stdout.decode('utf-8')
-    return 'Drive is not ready' not in sub_process_std_out
-
-
-def drive_open(drive_number: int) -> bool:
-    sub_process_result = subprocess.run(['setcd', '-i', '/dev/sr'+str(drive_number)],
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-    sub_process_std_out = sub_process_result.stdout.decode('utf-8')
-    return 'tray is open' in sub_process_std_out
-
-
-def wait_on_closed_drive(drive_number: int):
-    waiting = 1
-    while drive_open(drive_number):
-        waiting += 1
-        print("\rdrive /dev/sr" + str(drive_number) + " is open, waiting for you to close it with a disc inserted. ", end="")
-        spinner = "←↖↑↗→↘↓↙"
-        print(spinner[waiting % len(spinner)], end="\r")
-    sys.stdout.write("\033[K")  # Clear to the end of line
-
-
-def wait_on_ready_drive(drive_number: int):
-    waiting = 1
-    while not drive_ready(drive_number):
-        waiting += 1
-        print("\rdrive /dev/sr" + str(drive_number) + " is not ready, waiting for it to be ready. ", end="")
-        spinner = "←↖↑↗→↘↓↙"
-        print(spinner[waiting % len(spinner)], end="\r")
-    sys.stdout.write("\033[K")  # Clear to the end of line
+from funs import drive_exists, drive_full, drive_open, wait_on_closed_drive, wait_on_ready_drive  # NOQA
 
 
 def main():
@@ -79,11 +26,16 @@ def main():
     # only proceed if the drive exists
     assert drive_exists(drive_number), "drive /dev/sr" + str(drive_number) + " doesn't exist!"
 
+    prevdir = os.getcwd()
+    out_dir = f"{prevdir}{os.sep}dev_sr{drive_number}"
+    os.makedirs(out_dir, exist_ok=True)
+    os.chdir(out_dir)
+
     wait_on_ready_drive(drive_number)
     while not drive_full(drive_number):
         if not drive_open(drive_number):
             print("drive /dev/sr" + str(drive_number) + " does not contain a disc, opening it for you now. ")
-            subprocess.run(['eject', '/dev/sr'+str(drive_number)])
+            subprocess.run(['eject', '/dev/sr' + str(drive_number)])
         wait_on_closed_drive(drive_number)
         time.sleep(1)
         wait_on_ready_drive(drive_number)
@@ -96,8 +48,10 @@ def main():
     else:
         w_str = ["", ""]
 
-    abcde_instance = subprocess.Popen(["abcde", "-x", "-N", "-V", "-G", "-B", "-d", "/dev/sr" + str(drive_number), w_str[0], w_str[1]])
+    abcde_instance = subprocess.Popen(["abcde", "-x", "-N", "-V", "-G", "-B", "-d", f"/dev/sr{str(drive_number)}", w_str[0], w_str[1]])
     abcde_instance.wait()
+    os.chdir(prevdir)
+    subprocess.Popen(['flatpak', 'run', 'org.musicbrainz.Picard', '.'])
 
     # eject cd after finishing
     subprocess.run(['eject', '/dev/sr' + str(drive_number)])
