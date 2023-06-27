@@ -15,6 +15,17 @@ import tqdm
 from funs import drive_exists, drive_full, drive_open, get_dvd_label, wait_on_closed_drive, wait_on_ready_drive  # NOQA
 
 
+def apply_current_to_bar(bar: tqdm.tqdm, current_val: int, max_v: int) -> None:
+    bar.n = current_val
+    if current_val > 0:
+        total_left = max_v - current_val
+        elapsed_total = datetime.timedelta(seconds=bar.format_dict['elapsed'])
+        time_total_left = elapsed_total * total_left / current_val
+        total_eta = datetime.datetime.now() + time_total_left
+        bar.set_postfix_str(f"{datetime.datetime.min + elapsed_total:%H:%M:%S}<{datetime.datetime.min + time_total_left:%H:%M:%S} @{total_eta:%H:%M:%S}")
+    bar.refresh()
+
+
 def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int) -> int:
     wait_on_ready_drive(drive_number)
     while not drive_full(drive_number):
@@ -43,10 +54,10 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
     makemkvcon_process = subprocess.Popen(makemkv_command.split(" "), stdout=subprocess.PIPE)
 
     regex_progress = re.compile(r"""PRGV:(\d+),(\d+),(\d+)""")
-    regex_progress_title_current = re.compile(r"""PRGC:(\d+),(\d+),\"(.+\")""")
-    regex_progress_title_total = re.compile(r"""PRGT:(\d+),(\d+),\"(.+\")""")
+    regex_progress_title_current = re.compile(r"""PRGC:(\d+),(\d+),\"(.+)\"""")
+    regex_progress_title_total = re.compile(r"""PRGT:(\d+),(\d+),\"(.+)\"""")
 
-    bar_format = "{desc}{percentage:6.2f}%{bar}{postfix}"
+    bar_format = "{desc}{percentage:6.2f}%{bar}[{elapsed}<{remaining}][{postfix}]"
     bar_total = tqdm.tqdm(dynamic_ncols=True, position=0, desc="  total", leave=False, bar_format=bar_format, total=65536)
     bar_current = tqdm.tqdm(dynamic_ncols=True, position=1, desc="current", leave=False, bar_format=bar_format, total=65536)
 
@@ -66,35 +77,12 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
 
         if matches_progress is not None and len(matches_progress) >= 3:
             current, total, max_v, *_ = matches_progress
-            current = int(current)
-            total = int(total)
-            max_v = int(max_v)
-
-            bar_current.n = current
-            # bar_current.total = max_v
-            bar_total.n = total
-            # bar_total.total = max_v
-            # bar_total.write(f"{datetime.datetime.now()}: {type(elapsed)=}{elapsed=}")
-
-            if current > 0:
-                current_left = max_v - current
-                elapsed_current = datetime.timedelta(seconds=bar_current.format_dict['elapsed'])
-                time_current_left = elapsed_current * current_left / current
-                current_eta = datetime.datetime.now() + time_current_left
-                bar_current.set_postfix_str(f"[{datetime.datetime.min + elapsed_current:%H:%M:%S}<{datetime.datetime.min + time_current_left:%H:%M:%S} @{current_eta:%H:%M:%S}]")
-
-            if total > 0:
-                total_left = max_v - total
-                elapsed_total = datetime.timedelta(seconds=bar_total.format_dict['elapsed'])
-                time_total_left = elapsed_total * total_left / total
-                total_eta = datetime.datetime.now() + time_total_left
-                bar_total.set_postfix_str(f"[{datetime.datetime.min + elapsed_total:%H:%M:%S}<{datetime.datetime.min + time_total_left:%H:%M:%S} @{total_eta:%H:%M:%S}]")
-            bar_current.refresh()
-            bar_total.refresh()
+            apply_current_to_bar(bar_current, int(current), int(max_v))
+            apply_current_to_bar(bar_total, int(total), int(max_v))
         elif matches_progress_title_current is not None and len(matches_progress_title_current) >= 3:
-            bar_current = tqdm.tqdm(dynamic_ncols=True, position=1, desc=matches_progress_title_current[2], leave=True, bar_format=bar_format, total=65536)
+            bar_current = tqdm.tqdm(dynamic_ncols=True, position=1, desc=matches_progress_title_current[2].rjust(30), leave=True, bar_format=bar_format, total=65536)
         elif matches_progress_title_total is not None and len(matches_progress_title_total) >= 3:
-            bar_total = tqdm.tqdm(dynamic_ncols=True, position=0, desc=matches_progress_title_total[2], leave=True, bar_format=bar_format, total=65536)
+            bar_total = tqdm.tqdm(dynamic_ncols=True, position=0, desc=matches_progress_title_total[2].rjust(30), leave=True, bar_format=bar_format, total=65536)
         else:
             if line == "":
                 # empty string after termination,
@@ -102,7 +90,11 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
                 break
             if line.strip() == "":
                 continue
-            bar_current.write(f"{datetime.datetime.now()}: {line.strip()}")
+            if line.strip().startswith("MSG:"):
+                quote = "\""
+                bar_current.write(f"{datetime.datetime.now()}: {line.strip().split(quote)[1]}")
+            else:
+                bar_current.write(f"{datetime.datetime.now()}: {line.strip()}")
 
         bar_current.update(0)
         bar_total.update(0)
