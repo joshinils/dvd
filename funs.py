@@ -12,7 +12,7 @@ def drive_exists(drive_number: int) -> bool:
     return 'No such file or directory' not in sub_process_std_err
 
 
-def drive_full(drive_number: int) -> bool:
+def drive_is_full(drive_number: int) -> bool:
     sub_process_result = subprocess.run(['setcd', '-i', f"/dev/sr{drive_number}"],
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE)
@@ -20,7 +20,7 @@ def drive_full(drive_number: int) -> bool:
     return 'Disc found in drive' in sub_process_std_out
 
 
-def drive_ready(drive_number: int) -> bool:
+def drive_is_ready(drive_number: int) -> bool:
     try:
         sub_process_result = subprocess.run(['setcd', '-i', f"/dev/sr{drive_number}"],
                                             stdout=subprocess.PIPE,
@@ -32,7 +32,7 @@ def drive_ready(drive_number: int) -> bool:
         return False
 
 
-def drive_open(drive_number: int) -> bool:
+def drive_is_open(drive_number: int) -> bool:
     sub_process_result = subprocess.run(['setcd', '-i', f"/dev/sr{drive_number}"],
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE)
@@ -42,7 +42,7 @@ def drive_open(drive_number: int) -> bool:
 
 def wait_on_closed_drive(drive_number: int):
     waiting = 1
-    while drive_open(drive_number):
+    while drive_is_open(drive_number):
         waiting += 1
         print(f"\rdrive /dev/sr{drive_number} is open, waiting for you to close it with a disc inserted. ", end="")
         spinner = "←↖↑↗→↘↓↙"
@@ -52,7 +52,7 @@ def wait_on_closed_drive(drive_number: int):
 
 def wait_on_ready_drive(drive_number: int):
     waiting = 1
-    while not drive_ready(drive_number):
+    while not drive_is_ready(drive_number):
         waiting += 1
         print(f"\rdrive /dev/sr{drive_number} is not ready, waiting for it to be ready. ", end="")
         spinner = "←↖↑↗→↘↓↙"

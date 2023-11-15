@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 
-from funs import drive_exists, drive_full, drive_open, wait_on_closed_drive, wait_on_ready_drive  # NOQA
+from funs import drive_exists, drive_is_full, drive_is_open, wait_on_closed_drive, wait_on_ready_drive  # NOQA
 
 
 def main():
@@ -32,8 +32,8 @@ def main():
     os.chdir(out_dir)
 
     wait_on_ready_drive(drive_number)
-    while not drive_full(drive_number):
-        if not drive_open(drive_number):
+    while not drive_is_full(drive_number):
+        if not drive_is_open(drive_number):
             print("drive /dev/sr" + str(drive_number) + " does not contain a disc, opening it for you now. ")
             subprocess.run(['eject', '/dev/sr' + str(drive_number)])
         wait_on_closed_drive(drive_number)

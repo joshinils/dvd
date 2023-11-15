@@ -5,11 +5,12 @@ import re
 import shutil
 import subprocess
 import time
+from typing import Tuple
 
 import dateutil.relativedelta
 import tqdm
 
-from funs import drive_full, drive_open, get_dvd_label, wait_on_closed_drive, wait_on_ready_drive  # NOQA
+from funs import drive_is_full, drive_is_open, get_dvd_label, wait_on_closed_drive, wait_on_ready_drive  # NOQA
 
 
 def apply_current_to_bar(bar: tqdm.tqdm, current_val: int, max_v: int) -> None:
@@ -19,14 +20,17 @@ def apply_current_to_bar(bar: tqdm.tqdm, current_val: int, max_v: int) -> None:
         elapsed_total = datetime.timedelta(seconds=bar.format_dict['elapsed'])
         time_total_left = elapsed_total * total_left / current_val
         total_eta = datetime.datetime.now() + time_total_left
-        bar.unit = f" <{datetime.datetime.min + time_total_left:%M:%S} @{total_eta:%H:%M:%S}"
+        if time_total_left.total_seconds() < 60 * 60:
+            bar.unit = f" <{datetime.datetime.min + time_total_left:%M:%S} @{total_eta:%H:%M:%S}"
+        else:
+            bar.unit = f" <{datetime.datetime.min + time_total_left:%H:%M:%S} @{total_eta:%H:%M:%S}"
     bar.refresh()
 
 
-def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int) -> int:
+def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int) -> Tuple[int, str]:
     wait_on_ready_drive(drive_number)
-    while not drive_full(drive_number):
-        if not drive_open(drive_number):
+    while not drive_is_full(drive_number):
+        if not drive_is_open(drive_number):
             print(f"drive /dev/sr{drive_number} does not contain a disc, opening it for you now. ")
             subprocess.run(['eject', '/dev/sr' + str(drive_number)])
         wait_on_closed_drive(drive_number)
@@ -35,8 +39,8 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
         print("", end="")
 
     # at this point the drive should be ready and there should be a disc in it
-
-    out_name = f"dev_sr{drive_number}_{get_dvd_label(drive_number).title()}".replace(" ", "_")
+    name = get_dvd_label(drive_number)
+    out_name = f"dev_sr{drive_number}_{name.title()}".replace(" ", "_")
     complete_name = f"completed__{out_name}"
 
     print(f"{out_name=}")
@@ -44,6 +48,10 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
     ret_val = 1
     if os.path.exists(complete_name) is False:
         pathlib.Path(out_name).mkdir(exist_ok=True)
+    else:
+        print(f""""{complete_name}" exists, exiting""")
+        subprocess.run(['eject', '/dev/sr' + str(drive_number)])
+        return (-1, complete_name)
 
     date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
     makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r mkv --progress=-stdout --decrypt --minlength {minlength} --noscan dev:/dev/sr{drive_number} all {out_name}"""
@@ -118,8 +126,8 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
 
         ret_val = 0
     else:
-        return -1
+        return -1, name
 
     # eject dvd after finishing
     subprocess.run(['eject', '/dev/sr' + str(drive_number)])
-    return ret_val
+    return ret_val, name

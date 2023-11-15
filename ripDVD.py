@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
+import subprocess
 
 from funs import drive_exists
 
@@ -57,7 +59,14 @@ def main():
 
     while True:
         from dvd_funs import rip_single_DVD
-        rip_single_DVD(drive_number, minlength, fudge_months, fudge_days)
+        rc, name = rip_single_DVD(drive_number, minlength, fudge_months, fudge_days)
+
+        print(rc, name)
+        subprocess.run(
+            [os.path.expanduser("~/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
 
 
 if __name__ == '__main__':

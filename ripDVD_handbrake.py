@@ -7,7 +7,7 @@ import sys
 import time
 import urllib.parse
 
-from funs import drive_exists, drive_full, drive_open, get_dvd_label, wait_on_closed_drive, wait_on_ready_drive  # NOQA
+from funs import drive_exists, drive_is_full, drive_is_open, get_dvd_label, wait_on_closed_drive, wait_on_ready_drive  # NOQA
 
 
 def firefox_tab(moviepilot_search_term: str) -> None:
@@ -41,8 +41,8 @@ def main():
     # print("driveFull", driveFull(drive_number))
 
     wait_on_ready_drive(drive_number)
-    while not drive_full(drive_number):
-        if not drive_open(drive_number):
+    while not drive_is_full(drive_number):
+        if not drive_is_open(drive_number):
             print("drive /dev/sr" + str(drive_number) + " does not contain a disc, opening it for you now. ")
             subprocess.run(['eject', '/dev/sr' + str(drive_number)])
         wait_on_closed_drive(drive_number)
@@ -68,12 +68,12 @@ def main():
 
 def signal_handler(sig, frame):
     global drive_number
-    if drive_open(drive_number):
+    if drive_is_open(drive_number):
         subprocess.run(['eject', '/dev/sr' + str(drive_number), '-t'])
 
-        while drive_full(drive_number):
+        while drive_is_full(drive_number):
             wait_on_ready_drive(drive_number)
-            if not drive_open(drive_number):
+            if not drive_is_open(drive_number):
                 print(f"drive /dev/sr{drive_number} contains a disc, opening it for you now. ")
                 subprocess.run(['eject', f"/dev/sr{drive_number}"])
             wait_on_closed_drive(drive_number)
