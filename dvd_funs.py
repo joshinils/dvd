@@ -20,7 +20,12 @@ def apply_current_to_bar(bar: tqdm.tqdm, current_val: int, max_v: int) -> None:
         elapsed_total = datetime.timedelta(seconds=bar.format_dict['elapsed'])
         time_total_left = elapsed_total * total_left / current_val
         total_eta = datetime.datetime.now() + time_total_left
-        if time_total_left.total_seconds() < 60 * 60:
+
+        if time_total_left.days == 1:
+            bar.unit = f" <1 tag {datetime.datetime.min + time_total_left:%M:%S} @{total_eta:%a %H:%M:%S}"
+        if time_total_left.days > 1:
+            bar.unit = f" <{time_total_left.days} tage {datetime.datetime.min + time_total_left:%M:%S} @{total_eta:%a %H:%M:%S}"
+        elif time_total_left.total_seconds() < 60 * 60:
             bar.unit = f" <{datetime.datetime.min + time_total_left:%M:%S} @{total_eta:%H:%M:%S}"
         else:
             bar.unit = f" <{datetime.datetime.min + time_total_left:%H:%M:%S} @{total_eta:%H:%M:%S}"
