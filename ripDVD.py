@@ -63,7 +63,7 @@ def main():
 
         print(rc, name)
         subprocess.run(
-            [os.path.expanduser("~/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
+            [os.path.expanduser("/home/niels/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
