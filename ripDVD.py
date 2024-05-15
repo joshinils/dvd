@@ -13,7 +13,8 @@ def main():
     parser.add_argument(
         '-d',
         '--driveNo',
-        required=True,
+        action="append",
+        required=False,
         help='drive number, ie \'/dev/sr0\' means \'-d 0\'',
     )
 
@@ -24,6 +25,14 @@ def main():
         type=int,
         default=300,
         help='minimum title length in seconds, default=300',
+    )
+
+    parser.add_argument(
+        '-disc',
+        required=False,
+        default=None,
+        action="append",
+        help='disc number, cause somehow for backup the disc number is not the same as the drives device number',
     )
 
     parser.add_argument(
@@ -51,15 +60,20 @@ def main():
 
     drive_number: int = args.driveNo
     assert drive_number is not None, "why u put no drive number, that dum"
+    assert type(drive_number) is list and len(drive_number) == 1, f"drive_number given multiple times! {drive_number=} {type(drive_number)=}"
+    drive_number = drive_number[0]
 
     # only proceed if the drive exists
     assert drive_exists(drive_number), f"drive /dev/sr{drive_number} doesn't exist!"
 
     minlength: int = args.minlength
+    disc_number: int = args.disc
+    assert type(disc_number) is list and len(disc_number) == 1, f"disc given multiple times! {disc_number=} {type(disc_number)=}"
+    disc_number = disc_number[0]
 
     while True:
         from dvd_funs import rip_single_DVD
-        rc, name = rip_single_DVD(drive_number, minlength, fudge_months, fudge_days)
+        rc, name = rip_single_DVD(drive_number, minlength, fudge_months, fudge_days, disc_number)
 
         print(rc, name)
         subprocess.run(

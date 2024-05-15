@@ -7,7 +7,7 @@ import subprocess
 import time
 import traceback
 from collections import defaultdict
-from typing import DefaultDict, Tuple, Union
+from typing import DefaultDict, Optional, Tuple, Union
 
 import dateutil.relativedelta
 import tqdm
@@ -49,7 +49,7 @@ def play_sound(drive_no: Union[int, str]):
         playsound(fn)
 
 
-def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int) -> Tuple[int, str]:
+def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int, disc_number: Optional[int] = None) -> Tuple[int, str]:
     wait_on_ready_drive(drive_number)
     while not drive_is_full(drive_number):
         if not drive_is_open(drive_number):
@@ -77,15 +77,18 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
         return (-1, complete_name)
 
     date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
-    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r mkv --progress=-stdout --decrypt --minlength {minlength} --noscan dev:/dev/sr{drive_number} all {out_name}"""
+    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --minlength {minlength} --noscan mkv dev:/dev/sr{drive_number} all {out_name}"""
 
-    subprocess.run(["sudo", "timedatectl", "set-ntp", "off"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    subprocess.run(["sudo", "date", "--set", "2024-04-30T13:42"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if disc_number is not None:
+        makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --noscan backup disc:{disc_number} {out_name}"""
+
+    # subprocess.run(["sudo", "timedatectl", "set-ntp", "off"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # subprocess.run(["sudo", "date", "--set", "2024-04-30T13:42"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     print(makemkv_command)
     makemkvcon_process = subprocess.Popen(makemkv_command.split(" "), stdout=subprocess.PIPE)
 
-    subprocess.run(["sudo", "timedatectl", "set-ntp", "on"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # subprocess.run(["sudo", "timedatectl", "set-ntp", "on"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     regex_progress = re.compile(r"""PRGV:(\d+),(\d+),(\d+)""")
     regex_progress_title_current = re.compile(r"""PRGC:(\d+),(\d+),\"(.+)\"""")
