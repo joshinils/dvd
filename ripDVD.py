@@ -2,8 +2,11 @@
 
 import argparse
 import os
+import pathlib
 import subprocess
+from typing import List
 
+from dvd_funs import extract_single_folder, rip_single_DVD
 from funs import drive_exists
 
 
@@ -13,8 +16,9 @@ def main():
     parser.add_argument(
         '-d',
         '--driveNo',
-        action="append",
         required=False,
+        type=int,
+        action="append",
         help='drive number, ie \'/dev/sr0\' means \'-d 0\'',
     )
 
@@ -30,9 +34,18 @@ def main():
     parser.add_argument(
         '-disc',
         required=False,
+        type=int,
         default=None,
         action="append",
         help='disc number, cause somehow for backup the disc number is not the same as the drives device number',
+    )
+
+    parser.add_argument(
+        '-extract',
+        required=False,
+        type=str,
+        default=None,
+        help='Folder name of a backup, extracts all titles in contained therein',
     )
 
     parser.add_argument(
@@ -57,30 +70,49 @@ def main():
 
     fudge_months: int = args.fudge_months
     fudge_days: int = args.fudge_days
-
-    drive_number: int = args.driveNo
-    assert drive_number is not None, "why u put no drive number, that dum"
-    assert type(drive_number) is list and len(drive_number) == 1, f"drive_number given multiple times! {drive_number=} {type(drive_number)=}"
-    drive_number = drive_number[0]
-
-    # only proceed if the drive exists
-    assert drive_exists(drive_number), f"drive /dev/sr{drive_number} doesn't exist!"
-
     minlength: int = args.minlength
-    disc_number: int = args.disc
-    assert type(disc_number) is list and len(disc_number) == 1, f"disc given multiple times! {disc_number=} {type(disc_number)=}"
-    disc_number = disc_number[0]
+    extract: str = args.extract
 
-    while True:
-        from dvd_funs import rip_single_DVD
-        rc, name = rip_single_DVD(drive_number, minlength, fudge_months, fudge_days, disc_number)
+    drive_number_raw: List[int] = args.driveNo
+    if drive_number_raw is None and extract is None:
+        raise ValueError("why u put no drive number or extract, that dum")
+    drive_number = None
+    if type(drive_number_raw) is list:
+        if len(drive_number_raw) != 1:
+            raise ValueError(f"drive_number given multiple times! {drive_number_raw=} {type(drive_number_raw)=}")
+        drive_number = drive_number_raw[0]
+    if type(drive_number) is int and not drive_exists(drive_number):
+        raise ValueError(f"drive /dev/sr{drive_number} doesn't exist!")
 
+    disc_number_raw: List[int] = args.disc
+    disc_number = None
+    if type(disc_number_raw) is list:
+        if len(disc_number_raw) != 1:
+            raise ValueError(f"disc given multiple times! {disc_number_raw=} {type(disc_number_raw)=}")
+        disc_number = disc_number_raw[0]
+
+    if type(extract) is str:
+        extract_folder = pathlib.Path(extract)
+        if not extract_folder.exists():
+            raise ValueError(f"extract folder '{extract}' does not exist!")
+        if not extract_folder.is_dir():
+            raise ValueError(f"extract folder '{extract}' is not a folder!")
+
+    if extract is not None:
+        # only a single folder will be given to extract, makes no sense to keep going
+        rc, name = extract_single_folder(minlength, fudge_months, fudge_days, extract_folder)
         print(rc, name)
-        subprocess.run(
-            [os.path.expanduser("/home/niels/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+    else:
+        while True:
+            rc, name = rip_single_DVD(drive_number, minlength, fudge_months, fudge_days, disc_number)
+
+            print(rc, name)
+            # telegram message
+            subprocess.run(
+                [os.path.expanduser("/home/niels/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
 
 
 if __name__ == '__main__':

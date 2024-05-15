@@ -7,6 +7,7 @@ import subprocess
 import time
 import traceback
 from collections import defaultdict
+from inspect import currentframe, getframeinfo
 from typing import DefaultDict, Optional, Tuple, Union
 
 import dateutil.relativedelta
@@ -14,6 +15,11 @@ import tqdm
 from playsound import playsound
 
 from funs import drive_is_full, drive_is_open, get_dvd_label, wait_on_closed_drive, wait_on_ready_drive  # NOQA
+
+
+def print_lineno() -> str:
+    cf = currentframe()
+    return f"{getframeinfo(cf).filename}:{cf.f_back.f_lineno}"
 
 
 def apply_current_to_bar(bar: tqdm.tqdm, current_val: int, max_v: int) -> None:
@@ -49,39 +55,7 @@ def play_sound(drive_no: Union[int, str]):
         playsound(fn)
 
 
-def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int, disc_number: Optional[int] = None) -> Tuple[int, str]:
-    wait_on_ready_drive(drive_number)
-    while not drive_is_full(drive_number):
-        if not drive_is_open(drive_number):
-            print(f"drive /dev/sr{drive_number} does not contain a disc, opening it for you now. ")
-            subprocess.run(['eject', '/dev/sr' + str(drive_number)])
-        wait_on_closed_drive(drive_number)
-        time.sleep(1)
-        wait_on_ready_drive(drive_number)
-        print("", end="")
-
-    # at this point the drive should be ready and there should be a disc in it
-    name = get_dvd_label(drive_number)
-    out_name = f"dev_sr{drive_number}_{name.title()}".replace(" ", "_")
-    complete_name = f"completed__{out_name}"
-
-    print(f"{out_name=}")
-
-    ret_val = 1
-    if os.path.exists(complete_name) is False:
-        pathlib.Path(out_name).mkdir(exist_ok=True)
-    else:
-        print(f""""{complete_name}" exists, exiting""")
-        subprocess.run(['eject', '/dev/sr' + str(drive_number)])
-        time.sleep(5)
-        return (-1, complete_name)
-
-    date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
-    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --minlength {minlength} --noscan mkv dev:/dev/sr{drive_number} all {out_name}"""
-
-    if disc_number is not None:
-        makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --noscan backup disc:{disc_number} {out_name}"""
-
+def run_makemkv_command(makemkv_command: str):
     # subprocess.run(["sudo", "timedatectl", "set-ntp", "off"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # subprocess.run(["sudo", "date", "--set", "2024-04-30T13:42"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -172,8 +146,74 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
     bar_current.close()
     bar_total.close()
 
-    return_code = makemkvcon_process.wait()
+    return makemkvcon_process.wait()
 
+
+def extract_single_folder(minlength: int, fudge_months: int, fudge_days: int, extract: Optional[pathlib.Path] = None) -> Tuple[int, str]:
+    ret_val = 1
+    out_name = f"running_extract__{extract}/files"
+    complete_name = f"extract_{str(extract).removeprefix('bluray_')}"
+
+    pathlib.Path(out_name).mkdir(exist_ok=True, parents=True)
+
+    date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
+    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --minlength {minlength} --noscan mkv file:{extract} all {out_name}"""
+
+    return_code = run_makemkv_command(makemkv_command)
+
+    if return_code == 0:
+        print(f"{out_name=}")
+        try:
+            (pathlib.Path(complete_name) / extract).mkdir(parents=True, exist_ok=True)
+            extract.rename(pathlib.Path(complete_name) / extract)
+            try:
+                shutil.move(out_name, complete_name)
+            except Exception as ee:
+                print(print_lineno(), type(ee), ee, f"'{out_name=}' '{complete_name=}'")
+        except Exception as e:
+            print(print_lineno(), type(e), e, f"'{out_name=}' '{complete_name=}'")
+
+        ret_val = 0
+    else:
+        return -1, extract
+
+    return ret_val, extract
+
+
+def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int, disc_number: Optional[int] = None) -> Tuple[int, str]:
+    wait_on_ready_drive(drive_number)
+    while not drive_is_full(drive_number):
+        if not drive_is_open(drive_number):
+            print(f"drive /dev/sr{drive_number} does not contain a disc, opening it for you now. ")
+            subprocess.run(['eject', '/dev/sr' + str(drive_number)])
+        wait_on_closed_drive(drive_number)
+        time.sleep(1)
+        wait_on_ready_drive(drive_number)
+        print("", end="")
+
+    # at this point the drive should be ready and there should be a disc in it
+    name = get_dvd_label(drive_number)
+    out_name = f"dev_sr{drive_number}_{name.title()}".replace(" ", "_")
+    complete_name = f"completed__{out_name}"
+
+    print(f"{out_name=}")
+
+    ret_val = 1
+    if os.path.exists(complete_name) is False:
+        pathlib.Path(out_name).mkdir(exist_ok=True)
+    else:
+        print(f""""{complete_name}" exists, exiting""")
+        subprocess.run(['eject', '/dev/sr' + str(drive_number)])
+        time.sleep(5)
+        return (-1, complete_name)
+
+    date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
+    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --minlength {minlength} --noscan mkv dev:/dev/sr{drive_number} all {out_name}"""
+
+    if disc_number is not None:
+        makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --noscan backup disc:{disc_number} {out_name}"""
+
+    return_code = run_makemkv_command(makemkv_command)
     if return_code == 0:
         print(f"{out_name=} {complete_name=}")
         try:
