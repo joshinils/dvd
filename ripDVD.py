@@ -6,7 +6,7 @@ import pathlib
 import subprocess
 from typing import List
 
-from dvd_funs import extract_single_folder, rip_single_DVD
+from dvd_funs import extract_single_folder
 from funs import drive_exists
 
 
@@ -104,6 +104,7 @@ def main():
         print(rc, name)
     else:
         while True:
+            from dvd_funs import rip_single_DVD
             rc, name = rip_single_DVD(drive_number, minlength, fudge_months, fudge_days, disc_number)
 
             print(rc, name)
