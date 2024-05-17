@@ -8,7 +8,7 @@ import time
 import traceback
 from collections import defaultdict
 from inspect import currentframe, getframeinfo
-from typing import DefaultDict, Optional, Tuple, Union
+from typing import DefaultDict, List, Optional, Tuple, Union
 
 import dateutil.relativedelta
 import tqdm
@@ -55,12 +55,12 @@ def play_sound(drive_no: Union[int, str]):
         playsound(fn)
 
 
-def run_makemkv_command(makemkv_command: str):
+def run_makemkv_command(makemkv_command: List[str]):
     # subprocess.run(["sudo", "timedatectl", "set-ntp", "off"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # subprocess.run(["sudo", "date", "--set", "2024-04-30T13:42"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    print(makemkv_command)
-    makemkvcon_process = subprocess.Popen(makemkv_command.split(" "), stdout=subprocess.PIPE)
+    print(f"'makemkv_command={' '.join(makemkv_command)}'")
+    makemkvcon_process = subprocess.Popen(makemkv_command, stdout=subprocess.PIPE)
 
     # subprocess.run(["sudo", "timedatectl", "set-ntp", "on"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -68,7 +68,7 @@ def run_makemkv_command(makemkv_command: str):
     regex_progress_title_current = re.compile(r"""PRGC:(\d+),(\d+),\"(.+)\"""")
     regex_progress_title_total = re.compile(r"""PRGT:(\d+),(\d+),\"(.+)\"""")
 
-    bar_format = "{desc}{percentage:7.3f}%{bar}[{n_fmt:>5}/{total_fmt}|{elapsed:^5}<{remaining:^5}]{unit:>17}"
+    bar_format = "{desc}{percentage:7.3f}%{bar}[{n_fmt:>5}/{total_fmt}|{elapsed:>7}<{remaining:>7}]{unit:>20}"
     colour_total_done = "#666666"  # 40L
     colour_current_done = "#808080"  # 50L
     colour_total = "#b3b3b3"  # 70L
@@ -137,6 +137,9 @@ def run_makemkv_command(makemkv_command: str):
             if bar_message.startswith("Failed to save title"):
                 failed_file = bar_message.split("to file")[-1].strip()
                 pathlib.Path(f"{failed_file}.failed").touch(exist_ok=True)
+            if bar_message.startswith("Too many hash check errors in file"):
+                hash_errors_file = bar_message.split("file")[-1].strip().rstrip(".")
+                pathlib.Path(f"{hash_errors_file}.hash_errors").touch(exist_ok=True)
 
         bar_current.update(0)
         bar_total.update(0)
@@ -152,26 +155,31 @@ def run_makemkv_command(makemkv_command: str):
 def extract_single_folder(minlength: int, fudge_months: int, fudge_days: int, extract: Optional[pathlib.Path] = None) -> Tuple[int, str]:
     ret_val = 1
     out_name = f"running_extract__{extract}/files"
-    complete_name = f"extract_{str(extract).removeprefix('bluray_')}"
+    complete_name = f"extract_{str(extract).removeprefix('discimage_').removesuffix('.discimage')}"
 
     pathlib.Path(out_name).mkdir(exist_ok=True, parents=True)
 
     date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
-    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --minlength {minlength} --noscan mkv file:{extract} all {out_name}"""
+    makemkv_command = ["datefudge", date_fudge.isoformat(), "makemkvcon", "-r", "--progress=-stdout", "--decrypt", "--minlength", f"{minlength}", "--noscan", "mkv", f"file:{extract}", "all", out_name]
 
     return_code = run_makemkv_command(makemkv_command)
 
     if return_code == 0:
         print(f"{out_name=}")
         try:
-            (pathlib.Path(complete_name) / extract).mkdir(parents=True, exist_ok=True)
-            extract.rename(pathlib.Path(complete_name) / extract)
+            backup_folder = pathlib.Path(complete_name) / f"discimage_{str(extract).removeprefix('discimage_').replace(' ', '_')}"
+            backup_folder.mkdir(parents=True, exist_ok=True)
+            extract.rename(backup_folder)
             try:
                 shutil.move(out_name, complete_name)
+                if pathlib.Path(out_name).exists():
+                    pathlib.Path(out_name).rmdir()
+                if pathlib.Path(out_name.removesuffix("/files")).exists():
+                    pathlib.Path(out_name.removesuffix("/files")).rmdir()
             except Exception as ee:
-                print(print_lineno(), type(ee), ee, f"'{out_name=}' '{complete_name=}'")
+                print(print_lineno(), type(ee), ee, f"{out_name=} {complete_name=}")
         except Exception as e:
-            print(print_lineno(), type(e), e, f"'{out_name=}' '{complete_name=}'")
+            print(print_lineno(), type(e), e, f"{out_name=} {complete_name=}")
 
         ret_val = 0
     else:
@@ -195,6 +203,8 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
     name = get_dvd_label(drive_number)
     out_name = f"dev_sr{drive_number}_{name.title()}".replace(" ", "_")
     complete_name = f"completed__{out_name}"
+    if disc_number is not None:
+        complete_name = f"{complete_name}.discimage"
 
     print(f"{out_name=}")
 
@@ -208,10 +218,10 @@ def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_d
         return (-1, complete_name)
 
     date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
-    makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --minlength {minlength} --noscan mkv dev:/dev/sr{drive_number} all {out_name}"""
+    makemkv_command = ["datefudge", date_fudge.isoformat(), "makemkvcon", "-r", "--progress=-stdout", "--decrypt", "--minlength", f"{minlength}", "--noscan", "mkv", f"dev:/dev/sr{drive_number}", "all", out_name]
 
     if disc_number is not None:
-        makemkv_command = f"""datefudge {date_fudge.isoformat()} makemkvcon -r --progress=-stdout --decrypt --noscan backup disc:{disc_number} {out_name}"""
+        makemkv_command = ["datefudge", date_fudge.isoformat(), "makemkvcon", "-r", "--progress=-stdout", "--decrypt", "--noscan", "backup", f"disc:{disc_number}", out_name]
 
     return_code = run_makemkv_command(makemkv_command)
     if return_code == 0:
