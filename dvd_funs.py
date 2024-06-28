@@ -152,24 +152,26 @@ def run_makemkv_command(makemkv_command: List[str]):
     return makemkvcon_process.wait()
 
 
-def extract_single_folder(minlength: int, fudge_months: int, fudge_days: int, extract: Optional[pathlib.Path] = None) -> Tuple[int, str]:
+def extract_single_input(minlength: int, fudge_months: int, fudge_days: int, extract_input: Optional[pathlib.Path] = None) -> Tuple[int, str]:
     ret_val = 1
-    out_name = f"running_extract__{extract}/files"
-    complete_name = f"extract_{str(extract).removeprefix('discimage_').removesuffix('.discimage')}"
+    out_name = f"running_extract__{extract_input}/files"
+    complete_name = f"extract_{str(extract_input).removeprefix('discimage_').removesuffix('.discimage')}"
 
     pathlib.Path(out_name).mkdir(exist_ok=True, parents=True)
 
     date_fudge = datetime.datetime.now() - dateutil.relativedelta.relativedelta(months=fudge_months, days=fudge_days)
-    makemkv_command = ["datefudge", date_fudge.isoformat(), "makemkvcon", "-r", "--progress=-stdout", "--decrypt", "--minlength", f"{minlength}", "--noscan", "mkv", f"file:{extract}", "all", out_name]
+    makemkv_command = ["datefudge", date_fudge.isoformat(), "makemkvcon", "-r", "--progress=-stdout", "--decrypt", "--minlength", f"{minlength}", "--noscan", "mkv", f"file:{extract_input}", "all", out_name]
 
     return_code = run_makemkv_command(makemkv_command)
 
     if return_code == 0:
         print(f"{out_name=}")
         try:
-            backup_folder = pathlib.Path(complete_name) / f"discimage_{str(extract).removeprefix('discimage_').replace(' ', '_')}"
-            backup_folder.mkdir(parents=True, exist_ok=True)
-            extract.rename(backup_folder)
+            backup_folder = pathlib.Path(complete_name) / f"discimage_{str(extract_input).removeprefix('discimage_').replace(' ', '_')}"
+            backup_folder.parent.mkdir(parents=True, exist_ok=True)
+            if extract_input.is_dir():
+                backup_folder.mkdir(parents=True, exist_ok=True)
+            extract_input.rename(backup_folder)
             try:
                 shutil.move(out_name, complete_name)
                 if pathlib.Path(out_name).exists():
@@ -183,9 +185,9 @@ def extract_single_folder(minlength: int, fudge_months: int, fudge_days: int, ex
 
         ret_val = 0
     else:
-        return -1, extract
+        return -1, extract_input
 
-    return ret_val, extract
+    return ret_val, extract_input
 
 
 def rip_single_DVD(drive_number: int, minlength: int, fudge_months: int, fudge_days: int, disc_number: Optional[int] = None) -> Tuple[int, str]:

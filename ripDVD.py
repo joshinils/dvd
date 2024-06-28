@@ -6,7 +6,7 @@ import pathlib
 import subprocess
 from typing import List
 
-from dvd_funs import extract_single_folder
+from dvd_funs import extract_single_input
 from funs import drive_exists
 
 
@@ -92,15 +92,13 @@ def main():
         disc_number = disc_number_raw[0]
 
     if type(extract) is str:
-        extract_folder = pathlib.Path(extract)
-        if not extract_folder.exists():
-            raise ValueError(f"extract folder '{extract}' does not exist!")
-        if not extract_folder.is_dir():
-            raise ValueError(f"extract folder '{extract}' is not a folder!")
+        extract_input = pathlib.Path(extract)
+        if not extract_input.exists():
+            raise ValueError(f"extract input '{extract}' does not exist!")
 
     if extract is not None:
         # only a single folder will be given to extract, makes no sense to keep going
-        rc, name = extract_single_folder(minlength, fudge_months, fudge_days, extract_folder)
+        rc, name = extract_single_input(minlength, fudge_months, fudge_days, extract_input)
         print(rc, name)
     else:
         while True:
@@ -110,7 +108,7 @@ def main():
             print(rc, name)
             # telegram message
             subprocess.run(
-                [os.path.expanduser("/home/niels/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
+                [os.path.expanduser("/home/jola/Documents/erinner_bot/t_msg"), f"done for drive /dev/sr{drive_number} {name}", "server-mail.id"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
